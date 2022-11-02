@@ -47,24 +47,34 @@ def read(file_path):
 BATCH_SIZE = 32
 EPOCHS = 100
 NEGPAIRS = 10
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4
+MOMENTUM = 0.9
+ENCODER = 'GPT2'
+CLIPNORM = 1.0
 
 data_dir = "datasets"
 
-# songs = pd.read_csv(os.path.join(data_dir, "songs.csv"), encoding='utf-8', sep=";")
-
 class SongTripletDataset(Dataset):
 
-    def __init__(self, train, seed, sentence_size=1):
+    def __init__(self, train, seed, encoder="DistilBERT", sentence_size=1):
         super(SongTripletDataset, self).__init__()
 
         self.train = train
         self.seed = seed
-        self.tokenizer = DistilBertTokenizer.from_pretrained(DISTILBERT_PATH)
         self.max_length = 512
         self.sentence_size = sentence_size
 
         self.data = pd.read_csv(os.path.join(data_dir, "songs.csv"), encoding='utf-8', sep=";").sort_values(by=["author", "title"])
+
+        if encoder == "DistilBERT":
+          self.tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+        elif encoder == "BERT":
+          self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        elif encoder == "GPT2":
+          self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+          self.tokenizer.pad_token = self.tokenizer.eos_token
+          self.end_token = self.tokenizer.eos_token_id
+          self.max_length = 1024
 
         if self.train:
             self.data, _ = train_test_split(
@@ -88,12 +98,16 @@ class SongTripletDataset(Dataset):
 
         self.processed_data = []
 
+        self.init_data = []
+
         doc_id = 0
 
         for author, doc in zip(self.authors, self.docs):
             
             temp = doc.split('\n')
             sentences = [ '\n'.join(temp[i:i+self.sentence_size]) for i in range(0, len(temp),self.sentence_size)]
+
+            self.init_data.extend([{"author":author, "sentence":sentence} for sentence in sentences])
 
             # Add the author as starting point of the document
             self.processed_data.append({
@@ -128,15 +142,7 @@ class SongTripletDataset(Dataset):
         print("Length of dataset: %d" % len(self.processed_data))
         print("Number of documents: %d" % (doc_id))
 
-    def get_tokenized(self, sentence):
-        tokenized = self.tokenizer(sentence, truncation=True, max_length=self.max_length)
-        input_ids = tokenized['input_ids']
-        attention_mask = tokenized['attention_mask']
-
-        input_ids += [self.tokenizer.eos_token_id] * (self.max_length - len(input_ids))
-        attention_mask += [0] * (self.max_length - len(attention_mask))
-
-        return input_ids, attention_mask
+        self.init_data = pd.DataFrame(dataset_train.init_data)
 
     def tokenize_caption(self, caption, device):
 
@@ -197,8 +203,8 @@ class SongTripletDataset(Dataset):
     def __len__(self):
         return len(self.processed_data)
 
-dataset_train = SongTripletDataset(train=True, seed=13)
-dataset_test = SongTripletDataset(train=False, seed=13)
+dataset_train = SongTripletDataset(encoder=ENCODER, train=True, seed=13)
+dataset_test = SongTripletDataset(encoder=ENCODER, train=False, seed=13)
 dataset_train._process_data()
 dataset_test._process_data()
 
@@ -210,9 +216,20 @@ na = len(dataset_train.data["author"].unique())
 author2id = {a:i for i, a in enumerate(sorted(dataset_train.data["author"].unique()))}
 id2author = {i:a for a,i in author2id.items()}
 
-model = BrownianEncoder(na, 128, 32, finetune=False)
+model = BrownianEncoder(na, 128, 32, tokenizer = ENCODER, finetune=False).to(device)
 
-optimizer = torch.optim.Adam(params = model.parameters(), lr = LEARNING_RATE)
+def init_author_embeddings(init_data, author2id, model):
+    print("Initializing author embedding weight")
+    for author, author_id in tqdm(author2id.items()):
+        input_ids, attention_mask = dataset_train.tokenize_caption(list(init_data[init_data.author==author]["sentence"]), device)
+        
+        model.init_author_embedding(input_ids, attention_mask, author_id)
+
+init_author_embeddings(dataset_train.init_data, author2id, model)
+
+# optimizer = torch.optim.Adam(params = model.parameters(), lr = LEARNING_RATE)
+
+optimizer = torch.optim.SGD(params = model.parameters(), lr = LEARNING_RATE, momentum = MOMENTUM)
 
 batch = next(iter(dataloader_train))
 
@@ -222,17 +239,17 @@ def get_loss_batch(batch, model, author2id):
     obs_t = batch['y_t']
     obs_T = batch['y_T']
 
-    is_author_0 = batch['0_is_author']
-    is_author_t = batch['t_is_author']
-    is_author_T = batch['T_is_author']
+    is_author_0 = torch.BoolTensor(batch['0_is_author']).to(device)
+    is_author_t = torch.BoolTensor(batch['t_is_author']).to(device)
+    is_author_T = torch.BoolTensor(batch['T_is_author']).to(device)
 
-    t_s = batch['t_'].float()
-    ts = batch['t'].float()
-    Ts = batch['T'].float()
+    t_s = torch.Tensor(batch['t_'].float()).to(device)
+    ts = torch.Tensor(batch['t'].float()).to(device)
+    Ts = torch.Tensor(batch['T'].float()).to(device)
 
-    authors_0 = [author2id[s.replace("_AUTHOR", "")] for s in np.array(obs_0)[is_author_0.numpy()]]
-    authors_t = [author2id[s.replace("_AUTHOR", "")] for s in np.array(obs_t)[is_author_t.numpy()]]
-    authors_T = [author2id[s.replace("_AUTHOR", "")] for s in np.array(obs_T)[is_author_T.numpy()]]
+    authors_0 = torch.LongTensor([author2id[s.replace("_AUTHOR", "")] for s in np.array(obs_0)[is_author_0.cpu().numpy()]]).to(device)
+    authors_t = torch.LongTensor([author2id[s.replace("_AUTHOR", "")] for s in np.array(obs_t)[is_author_t.cpu().numpy()]]).to(device)
+    authors_T = torch.LongTensor([author2id[s.replace("_AUTHOR", "")] for s in np.array(obs_T)[is_author_T.cpu().numpy()]]).to(device)
 
     input_ids, attention_masks = dataset_train.tokenize_caption(obs_0, device)
     z_0 = model(input_ids, attention_masks, is_author_0, authors_0)
@@ -255,16 +272,15 @@ def get_loss_batch(batch, model, author2id):
                 alpha=0,
                 var=0,
                 log_q_y_T=log_q_y_T,
-                max_seq_len=batch['total_t'].float()
+                max_seq_len=torch.Tensor(batch['total_t'].float()).to(device)
             )
 
     loss = loss_fn.get_loss()
 
     return loss
-
 def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
 
-    test_dataloader = DataLoader(dataset_train, batch_size=BATCH_SIZE, shuffle=False, pin_memory=True)
+    test_dataloader = DataLoader(dataset_test, batch_size=BATCH_SIZE, shuffle=False, pin_memory=True)
 
     loss_eval = 0
     for epoch in range(1, epochs+1):
@@ -275,16 +291,19 @@ def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
         for batch in tqdm(train_dataloader):  
 
             loss = get_loss_batch(batch, model, author2id)
+            
             loss.backward()
-
+            torch.nn.utils.clip_grad_norm_(model.parameters(), CLIPNORM)
             optimizer.step()
 
             loss_training+= loss.item()
 
         loss_training/=len(train_dataloader)
 
-        if epoch % 5 == 0:
+        if epoch % 10 == 0:
             model.eval()
+
+            torch.save(model, os.path.join("model", "model_ckpt_%d.pt" % epoch))
 
             with torch.no_grad():
                 loss_eval = 0
@@ -297,17 +316,15 @@ def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
                 
                 for data in test_dataset.processed_data:
                     if data['is_author']:
-                        data['z'] = model.authors_embeddings(torch.as_tensor(author2id[data['sentence'].replace("_AUTHOR", "")])).numpy()
+                        data['z'] = model.authors_embeddings(torch.as_tensor(author2id[data['sentence'].replace("_AUTHOR", "")]).to(device)).cpu().numpy()
                     else:
                         input_ids, attention_masks = test_dataset.tokenize_caption(data["sentence"], device)
-                        data['z'] = model(input_ids, attention_masks, torch.BoolTensor([False]), torch.LongTensor([])).numpy()
+                        data['z'] = model(input_ids, attention_masks, torch.BoolTensor([False]).to(device), torch.LongTensor([]).to(device)).cpu().numpy()
 
                 with open(os.path.join("model", "test_data_z_%d.pkl" % epoch), "wb") as f:
-                    pickle.dump(test_dataset.processed_data)                    
+                    pickle.dump(test_dataset.processed_data, f)                    
 
         print("[%d/%d] Evaluation loss : %.4f  |  Training loss : %.4f" % (epoch, epochs, loss_eval, loss_training), flush=True)
-
-        torch.save(model, os.path.join("model", "model_ckpt_%d.pt" % epoch))
 
 fit(EPOCHS, model, optimizer, dataloader_train, dataset_test, author2id)
 
