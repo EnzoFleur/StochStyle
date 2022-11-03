@@ -3,7 +3,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 import torch.nn as nn
-from transformers import DistilBertTokenizer
+from transformers import DistilBertTokenizer, BertTokenizer, GPT2Tokenizer
 from sklearn import metrics
 from sklearn.preprocessing import StandardScaler, normalize
 from sklearn.metrics import coverage_error,label_ranking_average_precision_score
@@ -98,7 +98,12 @@ class SongTripletDataset(Dataset):
 
         self.processed_data = []
 
+        self.doc_lengths = []
+
         self.init_data = []
+
+        if not self.train:
+          self.test_data = []
 
         doc_id = 0
 
@@ -108,7 +113,11 @@ class SongTripletDataset(Dataset):
             sentences = [ '\n'.join(temp[i:i+self.sentence_size]) for i in range(0, len(temp),self.sentence_size)]
 
             self.init_data.extend([{"author":author, "sentence":sentence} for sentence in sentences])
+            self.doc_lengths.append(len(sentences))
 
+            if not self.train:
+                self.test_data.append(sentences)
+            
             # Add the author as starting point of the document
             self.processed_data.append({
                 "sentence": "%s_AUTHOR" % author,
@@ -209,7 +218,6 @@ dataset_train._process_data()
 dataset_test._process_data()
 
 dataloader_train = DataLoader(dataset_train, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
-dataloader_test = DataLoader(dataset_train, batch_size=BATCH_SIZE, shuffle=False, pin_memory=True)
 
 na = len(dataset_train.data["author"].unique())
 
@@ -227,9 +235,9 @@ def init_author_embeddings(init_data, author2id, model):
 
 init_author_embeddings(dataset_train.init_data, author2id, model)
 
-# optimizer = torch.optim.Adam(params = model.parameters(), lr = LEARNING_RATE)
+optimizer = torch.optim.Adam(params = model.parameters(), lr = LEARNING_RATE)
 
-optimizer = torch.optim.SGD(params = model.parameters(), lr = LEARNING_RATE, momentum = MOMENTUM)
+# optimizer = torch.optim.SGD(params = model.parameters(), lr = LEARNING_RATE, momentum = MOMENTUM)
 
 batch = next(iter(dataloader_train))
 
@@ -278,6 +286,35 @@ def get_loss_batch(batch, model, author2id):
     loss = loss_fn.get_loss()
 
     return loss
+
+def authorship_attribution_eval(model, test_dataset, author2id):
+    with torch.no_grad():
+        aut_embeddings = model.authors_embeddings.weight.cpu().numpy()
+        doc_embeddings = []
+
+        for doc_length, doc in zip(test_dataset.doc_lengths, test_dataset.test_data):
+            input_ids, attention_masks = test_dataset.tokenize_caption(doc, device)
+            doc_embedding = model(input_ids, attention_masks, torch.BoolTensor([False]*doc_length).to(device), torch.LongTensor([]).to(device)).cpu().numpy().mean(axis=0)
+
+            doc_embeddings.append(doc_embedding)
+
+    aut_embeddings = normalize(aut_embeddings, axis=1)
+    doc_embeddings = normalize(np.vstack(doc_embeddings), axis=1)
+
+    nd = len(doc_embeddings)
+
+    aut_doc_test = np.zeros((nd, na))
+    aut_doc_test[[i for i in range(nd)],[author2id[author] for author in test_dataset.authors]] = 1
+
+    y_score = normalize( doc_embeddings @ aut_embeddings.transpose(),norm="l1")
+    ce = coverage_error(aut_doc_test, y_score)/na*100
+    lr = label_ranking_average_precision_score(aut_doc_test, y_score)*100
+
+    with open(os.path.join("results", "aa_results.txt"), "w") as f:
+        f.write("%s & ce & lr \n \t & %03f & %03f" % (model.method, ce, lr))
+    
+    return ce, lr
+
 def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
 
     test_dataloader = DataLoader(dataset_test, batch_size=BATCH_SIZE, shuffle=False, pin_memory=True)
@@ -303,6 +340,7 @@ def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
         if epoch % 10 == 0:
             model.eval()
 
+            ce, lr = authorship_attribution_eval(model, test_dataset, author2id)
             torch.save(model, os.path.join("model", "model_ckpt_%d.pt" % epoch))
 
             with torch.no_grad():
@@ -327,19 +365,3 @@ def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
         print("[%d/%d] Evaluation loss : %.4f  |  Training loss : %.4f" % (epoch, epochs, loss_eval, loss_training), flush=True)
 
 fit(EPOCHS, model, optimizer, dataloader_train, dataset_test, author2id)
-
-# tokenizer = DistilBertTokenizer.from_pretrained(DISTILBERT_PATH)
-
-# input_ids, attention_masks = dataset_train.tokenize_caption(obs_0, device)
-
-# x = model.encoder(input_ids, attention_masks)
-
-# distilbert_output = model.encoder(input_ids, attention_masks)
-# hidden_state = distilbert_output["last_hidden_state"]
-
-# hidden_state = hidden_state.sum(axis=1) / attention_masks.sum(axis=-1).unsqueeze(-1)
-
-# latent_state = model.mlp(hidden_state)
-
-# latent_state[is_author_0] = model.authors_embeddings(torch.LongTensor(authors_0))
-

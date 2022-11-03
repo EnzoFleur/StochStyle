@@ -50,6 +50,8 @@ class BrownianEncoder(nn.Module):
         self.finetune = finetune
         self.tokenizer = tokenizer
 
+        self.method = "%s" % tokenizer
+
         if self.tokenizer == "DistilBERT":
           self.encoder = DistilBertModel.from_pretrained("distilbert-base-uncased")
         elif self.tokenizer == "BERT":
