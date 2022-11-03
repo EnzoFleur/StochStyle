@@ -1,24 +1,20 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import DataLoader
-import torch.nn as nn
-from transformers import DistilBertTokenizer, BertTokenizer, GPT2Tokenizer
-from sklearn import metrics
-from sklearn.preprocessing import StandardScaler, normalize
+from sklearn.preprocessing import normalize
 from sklearn.metrics import coverage_error,label_ranking_average_precision_score
 from tqdm import tqdm
 import numpy as np
-from random import sample, seed
+from random import seed
 import os
 import argparse
 import pickle
 
-from encoders import DISTILBERT_PATH, BrownianEncoder, MLP
+from encoders import DISTILBERT_PATH, BrownianEncoder
 from brownianlosses import BrownianBridgeLoss, BrownianLoss
 
 from regressor import style_embedding_evaluation
-from datasets import SongTripletDataset
+from datasets import SongTripletDataset, GutenbergTripletDataset
 
 # Setting up the device for GPU usage
 
@@ -80,8 +76,13 @@ if __name__ == "__main__":
 
     data_dir = data_dir.split(os.sep)[-1]
 
-    dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13)
-    dataset_test = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13)
+    if DATASET == "songs":
+        dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13)
+        dataset_test = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13)
+    else:
+        dataset_train = GutenbergTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13)
+        dataset_test = GutenbergTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13)
+    
     dataset_train._process_data()
     dataset_test._process_data()
 
@@ -269,3 +270,5 @@ if __name__ == "__main__":
             print("[%d/%d] Evaluation loss : %.4f  |  Training loss : %.4f" % (epoch, epochs, loss_eval, loss_training), flush=True)
 
     fit(EPOCHS, model, optimizer, dataloader_train, dataset_test, author2id)
+
+    print("We're finished !")
