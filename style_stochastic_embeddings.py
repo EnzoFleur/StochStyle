@@ -50,7 +50,9 @@ NEGPAIRS = 10
 LEARNING_RATE = 1e-4
 MOMENTUM = 0.9
 ENCODER = 'GPT2'
+FINETUNE = False
 CLIPNORM = 1.0
+AUTHORSPACETEXT = False
 
 data_dir = "datasets"
 
@@ -224,7 +226,7 @@ na = len(dataset_train.data["author"].unique())
 author2id = {a:i for i, a in enumerate(sorted(dataset_train.data["author"].unique()))}
 id2author = {i:a for a,i in author2id.items()}
 
-model = BrownianEncoder(na, 128, 32, tokenizer = ENCODER, finetune=False).to(device)
+model = BrownianEncoder(na, 128, 32, tokenizer = ENCODER, finetune = FINETUNE).to(device)
 
 def init_author_embeddings(init_data, author2id, model):
     print("Initializing author embedding weight")
@@ -287,7 +289,7 @@ def get_loss_batch(batch, model, author2id):
 
     return loss
 
-def authorship_attribution_eval(model, test_dataset, author2id):
+def authorship_attribution_eval(model, test_dataset, author2id, epoch):
     with torch.no_grad():
         aut_embeddings = model.authors_embeddings.weight.cpu().numpy()
         doc_embeddings = []
@@ -311,7 +313,7 @@ def authorship_attribution_eval(model, test_dataset, author2id):
     lr = label_ranking_average_precision_score(aut_doc_test, y_score)*100
 
     with open(os.path.join("results", "aa_results.txt"), "w") as f:
-        f.write("%s & ce & lr \n \t & %03f & %03f" % (model.method, ce, lr))
+        f.write("%s & ce & lr \n %d & %03f & %03f" % (model.method, epoch, ce, lr))
     
     return ce, lr
 
@@ -340,7 +342,7 @@ def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
         if epoch % 10 == 0:
             model.eval()
 
-            ce, lr = authorship_attribution_eval(model, test_dataset, author2id)
+            ce, lr = authorship_attribution_eval(model, test_dataset, author2id, epoch)
             torch.save(model, os.path.join("model", "model_ckpt_%d.pt" % epoch))
 
             with torch.no_grad():

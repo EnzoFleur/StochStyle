@@ -16,6 +16,34 @@ def weights_init(m):
         torch.nn.init.zeros_(m.bias)
         m.bias.requires_grad = False
 
+class DAN(nn.Module):
+
+    def __init__(self, input_dim, hidden, r):
+        super(DAN, self).__init__()
+
+        self.input_dim = input_dim
+        self.hidden = hidden
+        self.r = r
+
+        self.do1 = nn.Dropout(0.1)
+        self.bn1 = nn.BatchNorm1d(input_dim)
+        self.fc1 = nn.Linear(input_dim, hidden)
+        self.do2 = nn.Dropout(0.1)
+        self.bn2 = nn.BatchNorm1d(hidden)
+        self.fc2 = nn.Linear(hidden, r)
+
+    def forward(self, x):
+
+        x = x.mean(dim=1)
+        x = self.do1(x)
+        x = self.bn1(x)
+        x = self.fc1(x)
+        x = self.do2(x)
+        x = self.bn2(x)
+        x = self.fc2(x)
+
+        return x
+
 class MLP(nn.Module):
         def __init__(self, input_dim, hidden_dim, output_dim):
             super(MLP, self).__init__()
@@ -41,16 +69,17 @@ class MLP(nn.Module):
             return self.mlp(x)
 
 class BrownianEncoder(nn.Module):
-    def __init__(self, na, hidden_dim, latent_dim, tokenizer="DistilBERT", finetune=False):
+    def __init__(self, na, hidden_dim, latent_dim, tokenizer="DistilBERT", finetune=False, authorspacetxt = False):
         super(BrownianEncoder, self).__init__()
 
         self.na = na
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
         self.finetune = finetune
+        self.authorspacetxt = authorspacetxt
         self.tokenizer = tokenizer
 
-        self.method = "%s" % tokenizer
+        self.method = "%s_%s_%s" % (tokenizer, "ATXT" * authorspacetxt, "FT" * finetune) 
 
         if self.tokenizer == "DistilBERT":
           self.encoder = DistilBertModel.from_pretrained("distilbert-base-uncased")
@@ -73,16 +102,24 @@ class BrownianEncoder(nn.Module):
         self.log_q.apply(weights_init)
         self.C_eta.apply(weights_init)
 
-        self.authors_embeddings = nn.Embedding(self.na, 32)
+        if authorspacetxt:
+            self.authors_embeddings = nn.Embedding(self.na, 768)
+        else:
+            self.authors_embeddings = nn.Embedding(self.na, 32)
 
-    def init_author_embedding(self, input_ids, attention_mask, author_id):
+        # nn.init.normal_(self.authors_embeddings.weight, mean=0.0, std=0.02)
+
+
+    def init_author_embedding(self, input_ids, attention_mask, author_id, authorspacetxt = False):
         with torch.no_grad():
             encoder_output = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
             hidden_state = encoder_output[0]
 
             hidden_state = hidden_state.sum(axis=1) / attention_mask.sum(axis=-1).unsqueeze(-1)
+            latent_state = hidden_state.mean(axis=0)
 
-            latent_state = self.mlp(hidden_state.mean(axis=0))
+            if not authorspacetxt:
+                latent_state = self.mlp(hidden_state)
 
             self.authors_embeddings.weight[author_id] = latent_state
 
@@ -116,9 +153,12 @@ class BrownianEncoder(nn.Module):
 
         hidden_state = self.compute_masked_means(hidden_state, attention_mask)
 
-        latent_state = self.mlp(hidden_state)
-
-        latent_state[is_author] = self.authors_embeddings(authors)
+        if self.authorspacetxt:
+            hidden_state[is_author] = self.authors_embeddings(torch.LongTensor(authors))
+            latent_state = self.mlp(hidden_state)
+        else:
+            latent_state = self.mlp(hidden_state)
+            latent_state[is_author] = self.authors_embeddings(torch.LongTensor(authors))
 
         return latent_state
 
