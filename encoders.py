@@ -83,7 +83,7 @@ class BrownianEncoder(nn.Module):
         self.tokenizer = tokenizer
         self.loss = loss
 
-        self.method = "%s_%s_%s_%s_%02f" % (tokenizer, "ATXT" * authorspacetxt, "FT" * finetune, loss, H) 
+        self.method = "%s_%s_%s_%s_%0.2f" % (tokenizer, "ATXT" * authorspacetxt, "FT" * finetune, loss, H) 
 
         if self.tokenizer == "DistilBERT":
           self.encoder = DistilBertModel.from_pretrained("distilbert-base-uncased")
@@ -122,7 +122,7 @@ class BrownianEncoder(nn.Module):
             hidden_state = hidden_state.sum(axis=1) / attention_mask.sum(axis=-1).unsqueeze(-1)
             latent_state = hidden_state.mean(axis=0)
 
-            if not authorspacetxt:
+            if not self.authorspacetxt:
                 latent_state = self.mlp(hidden_state)
 
             self.authors_embeddings.weight[author_id] = latent_state
