@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import torch
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 import torch.nn as nn
 from transformers import DistilBertTokenizer, BertTokenizer, GPT2Tokenizer
 from sklearn import metrics
@@ -10,17 +10,15 @@ from sklearn.metrics import coverage_error,label_ranking_average_precision_score
 from tqdm import tqdm
 import numpy as np
 from random import sample, seed
-import re
 import os
 import argparse
 import pickle
 
-import random
+from encoders import DISTILBERT_PATH, BrownianEncoder, MLP
+from brownianlosses import BrownianBridgeLoss, BrownianLoss
 
-from pyencoders import DISTILBERT_PATH, BrownianBridgeLoss, BrownianEncoder, MLP
-
-# from regressor import style_embedding_evaluation
-# from extractor import features_array_from_string
+from regressor import style_embedding_evaluation
+from datasets import SongTripletDataset
 
 # Setting up the device for GPU usage
 
@@ -33,17 +31,6 @@ def set_seed(graine):
     torch.manual_seed(graine)
     torch.cuda.manual_seed_all(graine)
 
-############# Text Reader ###############
-def clean_str(string):
-    string= re.sub(r"[^A-Za-z0-9!\"\£\€#$%\&\’'()\*\+,\-.\/:;\<\=\>?\@[\]\^\_`{\|}\~\n]", " ", string)
-    string = re.sub(r"\s{2,}", " ", string)
-    return string.strip()
-    
-def read(file_path):
-    with open(file_path, mode='r', encoding='utf-8') as f_in:
-        content=clean_str(f_in.read())
-    return(content)
-
 BATCH_SIZE = 32
 EPOCHS = 100
 NEGPAIRS = 10
@@ -53,169 +40,14 @@ ENCODER = 'GPT2'
 FINETUNE = False
 CLIPNORM = 1.0
 AUTHORSPACETEXT = False
+LOSS = "BB"
+HURST = 1/2
+DATASET = "songs"
 
 data_dir = "datasets"
 
-class SongTripletDataset(Dataset):
-
-    def __init__(self, train, seed, encoder="DistilBERT", sentence_size=1):
-        super(SongTripletDataset, self).__init__()
-
-        self.train = train
-        self.seed = seed
-        self.max_length = 512
-        self.sentence_size = sentence_size
-
-        self.data = pd.read_csv(os.path.join(data_dir, "songs.csv"), encoding='utf-8', sep=";").sort_values(by=["author", "title"])
-
-        if encoder == "DistilBERT":
-          self.tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
-        elif encoder == "BERT":
-          self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        elif encoder == "GPT2":
-          self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-          self.tokenizer.pad_token = self.tokenizer.eos_token
-          self.end_token = self.tokenizer.eos_token_id
-          self.max_length = 1024
-
-        if self.train:
-            self.data, _ = train_test_split(
-                                        self.data,
-                                        test_size=0.2,
-                                        stratify=self.data[['author']],
-                                        random_state=self.seed
-                                        )
-        else:
-            _, self.data = train_test_split(
-                            self.data,
-                            test_size=0.2,
-                            stratify=self.data[['author']],
-                            random_state=self.seed
-                            )
-
-    def _process_data(self):
-
-        self.authors = list(self.data.author)
-        self.docs = list(self.data.lyrics)
-
-        self.processed_data = []
-
-        self.doc_lengths = []
-
-        self.init_data = []
-
-        if not self.train:
-          self.test_data = []
-
-        doc_id = 0
-
-        for author, doc in zip(self.authors, self.docs):
-            
-            temp = doc.split('\n')
-            sentences = [ '\n'.join(temp[i:i+self.sentence_size]) for i in range(0, len(temp),self.sentence_size)]
-
-            self.init_data.extend([{"author":author, "sentence":sentence} for sentence in sentences])
-            self.doc_lengths.append(len(sentences))
-
-            if not self.train:
-                self.test_data.append(sentences)
-            
-            # Add the author as starting point of the document
-            self.processed_data.append({
-                "sentence": "%s_AUTHOR" % author,
-                "sentence_id": 0,
-                "doc_id": doc_id,
-                "total_doc_sentences": len(sentences),
-                "is_author": True
-            })
-
-            for sentence_id, sentence in enumerate(sentences, start=1):
-                sentence_info = {
-                    "sentence": sentence,
-                    "sentence_id": sentence_id,
-                    "doc_id": doc_id,
-                    "total_doc_sentences": len(sentences),
-                    "is_author": False
-                }
-                self.processed_data.append(sentence_info)
-
-            # Add the author as ending point of the document
-            self.processed_data.append({
-                "sentence": "%s_AUTHOR" % author,
-                "sentence_id": sentence_id+1,
-                "doc_id": doc_id,
-                "total_doc_sentences": len(sentences),
-                "is_author": True
-            })
-
-            doc_id += 1
-
-        print("Length of dataset: %d" % len(self.processed_data))
-        print("Number of documents: %d" % (doc_id))
-
-        self.init_data = pd.DataFrame(dataset_train.init_data)
-
-    def tokenize_caption(self, caption, device):
-
-        output = self.tokenizer(caption, padding=True, return_tensors='pt')
-
-        input_ids = output['input_ids']
-        attention_mask = output['attention_mask']
-
-        return input_ids.to(device), attention_mask.to(device)
-
-    def __getitem__(self, index):
-        item = self.processed_data[index]
-        sentence_num = item['sentence_id']
-
-        if sentence_num == 0:
-            index +=2
-        if sentence_num == 1:
-            index+=1
-
-        item = self.processed_data[index]
-        sentence_num = item['sentence_id']
-
-        T = sentence_num
-        # t is a random point in between
-        nums = list(range(T))
-        t1 = random.choice(nums)
-        nums.remove(t1)
-        t2 = random.choice(nums)
-        if t2 < t1:
-            t = t2
-            t2 = t1
-            t1 = t
-
-        assert t1 < t2 and t2 < T
-        y_0 = self.processed_data[index - T + t1]
-        y_t = self.processed_data[index - T + t2]
-        y_T = self.processed_data[index]
-
-        t_ = t1
-        t = t2
-
-        total_doc = item['total_doc_sentences']
-        result = {
-            'y_0': y_0['sentence'],
-            'y_t': y_t['sentence'],
-            'y_T': y_T['sentence'],
-            't_': t_,
-            't': t,
-            'T': T,
-            'total_t': total_doc,
-            '0_is_author': y_0['is_author'],
-            't_is_author': y_t['is_author'],
-            'T_is_author': y_T['is_author']
-        }
-
-        return result
-
-    def __len__(self):
-        return len(self.processed_data)
-
-dataset_train = SongTripletDataset(encoder=ENCODER, train=True, seed=13)
-dataset_test = SongTripletDataset(encoder=ENCODER, train=False, seed=13)
+dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13)
+dataset_test = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13)
 dataset_train._process_data()
 dataset_test._process_data()
 
@@ -226,7 +58,12 @@ na = len(dataset_train.data["author"].unique())
 author2id = {a:i for i, a in enumerate(sorted(dataset_train.data["author"].unique()))}
 id2author = {i:a for a,i in author2id.items()}
 
-model = BrownianEncoder(na, 128, 32, tokenizer = ENCODER, finetune = FINETUNE).to(device)
+model = BrownianEncoder(na, 128, 32,
+                        loss = LOSS,
+                        H=HURST,
+                        tokenizer = ENCODER,
+                        finetune = FINETUNE,
+                        authorspace = AUTHORSPACETEXT).to(device)
 
 def init_author_embeddings(init_data, author2id, model):
     print("Initializing author embedding weight")
@@ -238,8 +75,6 @@ def init_author_embeddings(init_data, author2id, model):
 init_author_embeddings(dataset_train.init_data, author2id, model)
 
 optimizer = torch.optim.Adam(params = model.parameters(), lr = LEARNING_RATE)
-
-# optimizer = torch.optim.SGD(params = model.parameters(), lr = LEARNING_RATE, momentum = MOMENTUM)
 
 batch = next(iter(dataloader_train))
 
@@ -272,26 +107,50 @@ def get_loss_batch(batch, model, author2id):
 
     log_q_y_T = model.get_log_q(z_t)
 
-    loss_fn = BrownianBridgeLoss(
-                z_0=z_0,
-                z_t=z_t,
-                z_T=z_T,
-                t_=t_s,
-                t=ts,
-                T=Ts,
-                alpha=0,
-                var=0,
-                log_q_y_T=log_q_y_T,
-                max_seq_len=torch.Tensor(batch['total_t'].float()).to(device)
-            )
+    if model.loss == "BB":
+        loss_fn = BrownianBridgeLoss(
+                    z_0=z_0,
+                    z_t=z_t,
+                    z_T=z_T,
+                    t_=t_s,
+                    t=ts,
+                    T=Ts,
+                    alpha=0,
+                    var=0,
+                    log_q_y_T=log_q_y_T,
+                    max_seq_len=torch.Tensor(batch['total_t'].float()).to(device),
+                    H=HURST
+                )
+    elif model.loss == "fBM":
+        loss_fn = BrownianLoss(
+            z_0=z_0,
+            z_t=z_t,
+            z_T=z_T,
+            t_=t_s,
+            t=ts,
+            T=Ts,
+            alpha=0,
+            var=0,
+            log_q_y_T=log_q_y_T,
+            max_seq_len=torch.Tensor(batch['total_t'].float()).to(device),
+            H=HURST
+        )
 
     loss = loss_fn.get_loss()
 
     return loss
 
-def authorship_attribution_eval(model, test_dataset, author2id, epoch):
+def authorship_attribution_style_eval(model, test_dataset, author2id, epoch):
+
+    features = pd.read_csv(os.path.join("datasets", DATASET, "features.csv"), sep=";").sort_values(by=["author", "id"])
+
     with torch.no_grad():
-        aut_embeddings = model.authors_embeddings.weight.cpu().numpy()
+
+        if model.authorstatetxt:
+            aut_embeddings = model.mlp(model.authors_embeddings.weight).cpu().numpy()
+        else:
+            aut_embeddings = model.authors_embeddings.weight.cpu().numpy()
+
         doc_embeddings = []
 
         for doc_length, doc in zip(test_dataset.doc_lengths, test_dataset.test_data):
@@ -312,10 +171,16 @@ def authorship_attribution_eval(model, test_dataset, author2id, epoch):
     ce = coverage_error(aut_doc_test, y_score)/na*100
     lr = label_ranking_average_precision_score(aut_doc_test, y_score)*100
 
+    style_df = style_embedding_evaluation(aut_embeddings, features.groupby("author").mean().reset_index(), n_fold=10)
+
     with open(os.path.join("results", "aa_results.txt"), "w") as f:
         f.write("%s & ce & lr \n %d & %03f & %03f" % (model.method, epoch, ce, lr))
     
-    return ce, lr
+    with open(os.path.join("results", "style_results.txt"), "w") as f:
+        f.write("%s & style \n" % (model.method, epoch, ce, lr))
+        f.write(style_df.to_string())
+
+    return ce, lr, style_df
 
 def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
 
@@ -342,7 +207,7 @@ def fit(epochs, model, optimizer, train_dataloader, test_dataset, author2id):
         if epoch % 10 == 0:
             model.eval()
 
-            ce, lr = authorship_attribution_eval(model, test_dataset, author2id, epoch)
+            _,_,_ = authorship_attribution_style_eval(model, test_dataset, author2id, epoch)
             torch.save(model, os.path.join("model", "model_ckpt_%d.pt" % epoch))
 
             with torch.no_grad():
