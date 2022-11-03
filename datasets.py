@@ -4,7 +4,6 @@ import torch
 from torch.utils.data import Dataset
 from transformers import DistilBertTokenizer, BertTokenizer, GPT2Tokenizer
 from sklearn.model_selection import train_test_split
-from random import sample, seed
 import os
 import re
 from tqdm import tqdm
@@ -12,6 +11,8 @@ from tqdm import tqdm
 import random
 
 from nltk.tokenize import sent_tokenize
+
+from encoders import DISTILBERT_PATH, BERT_PATH, GPT2_PATH
 
 ############# Text Reader ###############
 def clean_str(string):
@@ -38,11 +39,11 @@ class SongTripletDataset(Dataset):
         self.data = pd.read_csv(os.path.join(data_dir, "songs.csv"), encoding='utf-8', sep=";").sort_values(by=["author", "title"])
 
         if encoder == "DistilBERT":
-          self.tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+          self.tokenizer = DistilBertTokenizer.from_pretrained(DISTILBERT_PATH)
         elif encoder == "BERT":
-          self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+          self.tokenizer = BertTokenizer.from_pretrained(BERT_PATH)
         elif encoder == "GPT2":
-          self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+          self.tokenizer = GPT2Tokenizer.from_pretrained(GPT2_PATH)
           self.tokenizer.pad_token = self.tokenizer.eos_token
           self.end_token = self.tokenizer.eos_token_id
           self.max_length = 1024

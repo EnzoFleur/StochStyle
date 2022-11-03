@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import DistilBertModel, DistilBertTokenizer, GPT2Model, GPT2Tokenizer, BertModel, BertTokenizer
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from transformers import DistilBertModel, GPT2Model, BertModel
 import torch.nn.functional as F
 import numpy as np
 import os
@@ -10,6 +9,8 @@ from torch import cuda
 device = 'cuda' if cuda.is_available() else 'cpu'
 
 DISTILBERT_PATH = os.path.join("..","distilBERT", "distilbert-base-uncased")
+BERT_PATH = os.path.join("..", "BERT", "bert-base-uncased")
+GPT2_PATH = os.path.join("..", "GPT2")
 
 def weights_init(m):
     if isinstance(m, nn.Linear):
@@ -86,11 +87,11 @@ class BrownianEncoder(nn.Module):
         self.method = "%s_%s_%s_%s_%0.2f" % (tokenizer, "ATXT" * authorspacetxt, "FT" * finetune, loss, H) 
 
         if self.tokenizer == "DistilBERT":
-          self.encoder = DistilBertModel.from_pretrained("distilbert-base-uncased")
+          self.encoder = DistilBertModel.from_pretrained(DISTILBERT_PATH)
         elif self.tokenizer == "BERT":
-          self.encoder = BertModel.from_pretrained("bert-base-uncased")
+          self.encoder = BertModel.from_pretrained(BERT_PATH)
         elif self.tokenizer == "GPT2":
-          self.encoder = GPT2Model.from_pretrained("gpt2")
+          self.encoder = GPT2Model.from_pretrained(GPT2_PATH)
         
         for param in self.encoder.parameters():
             param.requires_grad = self.finetune
