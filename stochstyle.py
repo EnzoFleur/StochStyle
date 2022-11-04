@@ -57,7 +57,7 @@ if __name__ == "__main__":
                         help='Loss (either BB or fBM')
     parser.add_argument('-e','--encoder', default="DistilBERT", type=str,
                         help='Language encoder')
-    parser.add_argument('-h','--hurst', default=1/2, type=str,
+    parser.add_argument('-h','--hurst', default=1/2, type=float,
                         help='Hurst parameter (if loss is BB)')
     args = parser.parse_args()
 
