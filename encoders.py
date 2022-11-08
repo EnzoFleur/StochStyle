@@ -159,10 +159,10 @@ class BrownianEncoder(nn.Module):
         hidden_state = self.compute_masked_means(hidden_state, attention_mask)
 
         if self.authorspacetxt:
-            hidden_state[is_author] = self.authors_embeddings(torch.LongTensor(authors))
+            hidden_state[is_author] = self.authors_embeddings(authors)
             latent_state = self.mlp(hidden_state)
         else:
             latent_state = self.mlp(hidden_state)
-            latent_state[is_author] = self.authors_embeddings(torch.LongTensor(authors))
+            latent_state[is_author] = self.authors_embeddings(authors)
 
         return latent_state

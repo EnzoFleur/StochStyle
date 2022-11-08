@@ -76,7 +76,7 @@ if __name__ == "__main__":
                         help='Loss (either BB or fBM')
     parser.add_argument('-e','--encoder', default="DistilBERT", type=str,
                         help='Language encoder')
-    parser.add_argument('-h','--hurst', default=1/2, type=str,
+    parser.add_argument('-hu','--hurst', default=1/2, type=str,
                         help='Hurst parameter (if loss is BB)')
     args = parser.parse_args()
 
@@ -92,8 +92,6 @@ if __name__ == "__main__":
     FINETUNE  = args.finetune
 
     CLIPNORM = 1.0
-
-    data_dir = data_dir.split(os.sep)[-1]
 
     if DATASET == "songs":
         dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13)
