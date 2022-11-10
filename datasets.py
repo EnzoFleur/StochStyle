@@ -27,7 +27,7 @@ def read(file_path):
 
 class SongTripletDataset(Dataset):
 
-    def __init__(self, data_dir, train, seed, encoder="DistilBERT", sentence_size=1):
+    def __init__(self, data_dir, train, seed, author_mode=1, encoder="DistilBERT", sentence_size=1):
         super(SongTripletDataset, self).__init__()
 
         self.data_dir = data_dir
@@ -35,6 +35,9 @@ class SongTripletDataset(Dataset):
         self.seed = seed
         self.max_length = 512
         self.sentence_size = sentence_size
+
+        # Author_mode is either 1 (only added at the start) or 2 (added at the start and the end of the document)
+        self.author_mode = author_mode
 
         self.data = pd.read_csv(os.path.join(data_dir, "songs.csv"), encoding='utf-8', sep=";").sort_values(by=["author", "title"])
 
@@ -85,7 +88,9 @@ class SongTripletDataset(Dataset):
             sentences = [ '\n'.join(temp[i:i+self.sentence_size]) for i in range(0, len(temp),self.sentence_size)]
 
             self.init_data.extend([{"author":author, "sentence":sentence} for sentence in sentences])
-            self.doc_lengths.append(len(sentences))
+            doc_length = len(sentences) + self.author_mode
+
+            self.doc_lengths.append(doc_length)
 
             if not self.train:
                 self.test_data.append(sentences)
@@ -95,7 +100,7 @@ class SongTripletDataset(Dataset):
                 "sentence": "%s_AUTHOR" % author,
                 "sentence_id": 0,
                 "doc_id": doc_id,
-                "total_doc_sentences": len(sentences),
+                "total_doc_sentences": doc_length,
                 "is_author": True
             })
 
@@ -104,19 +109,20 @@ class SongTripletDataset(Dataset):
                     "sentence": sentence,
                     "sentence_id": sentence_id,
                     "doc_id": doc_id,
-                    "total_doc_sentences": len(sentences),
+                    "total_doc_sentences": doc_length,
                     "is_author": False
                 }
                 self.processed_data.append(sentence_info)
 
-            # Add the author as ending point of the document
-            self.processed_data.append({
-                "sentence": "%s_AUTHOR" % author,
-                "sentence_id": sentence_id+1,
-                "doc_id": doc_id,
-                "total_doc_sentences": len(sentences),
-                "is_author": True
-            })
+            if self.author_mode == 2:
+                # Add the author as ending point of the document
+                self.processed_data.append({
+                    "sentence": "%s_AUTHOR" % author,
+                    "sentence_id": sentence_id+1,
+                    "doc_id": doc_id,
+                    "total_doc_sentences": doc_length,
+                    "is_author": True
+                })
 
             doc_id += 1
 
@@ -187,7 +193,7 @@ class SongTripletDataset(Dataset):
 
 class GutenbergTripletDataset(Dataset):
 
-    def __init__(self, data_dir, train, seed, encoder="DistilBERT", sentence_size=1):
+    def __init__(self, data_dir, train, seed, author_mode=1, encoder="DistilBERT", sentence_size=1):
         super(GutenbergTripletDataset, self).__init__()
 
         self.data_dir = data_dir
@@ -195,6 +201,7 @@ class GutenbergTripletDataset(Dataset):
         self.seed = seed
         self.max_length = 512
         self.sentence_size = sentence_size
+        self.author_mode = author_mode
 
         self.authors = []
         self.docs = []
@@ -250,10 +257,13 @@ class GutenbergTripletDataset(Dataset):
 
         for author, doc in zip(self.authors, self.docs):
             
-            sentences = sent_tokenize(doc)
+            temp = doc.split('\n')
+            sentences = [ '\n'.join(temp[i:i+self.sentence_size]) for i in range(0, len(temp),self.sentence_size)]
 
             self.init_data.extend([{"author":author, "sentence":sentence} for sentence in sentences])
-            self.doc_lengths.append(len(sentences))
+            doc_length = len(sentences) + self.author_mode
+
+            self.doc_lengths.append(doc_length)
 
             if not self.train:
                 self.test_data.append(sentences)
@@ -263,7 +273,7 @@ class GutenbergTripletDataset(Dataset):
                 "sentence": "%s_AUTHOR" % author,
                 "sentence_id": 0,
                 "doc_id": doc_id,
-                "total_doc_sentences": len(sentences),
+                "total_doc_sentences": doc_length,
                 "is_author": True
             })
 
@@ -272,19 +282,20 @@ class GutenbergTripletDataset(Dataset):
                     "sentence": sentence,
                     "sentence_id": sentence_id,
                     "doc_id": doc_id,
-                    "total_doc_sentences": len(sentences),
+                    "total_doc_sentences": doc_length,
                     "is_author": False
                 }
                 self.processed_data.append(sentence_info)
 
-            # Add the author as ending point of the document
-            self.processed_data.append({
-                "sentence": "%s_AUTHOR" % author,
-                "sentence_id": sentence_id+1,
-                "doc_id": doc_id,
-                "total_doc_sentences": len(sentences),
-                "is_author": True
-            })
+            if self.author_mode == 2:
+                # Add the author as ending point of the document
+                self.processed_data.append({
+                    "sentence": "%s_AUTHOR" % author,
+                    "sentence_id": sentence_id+1,
+                    "doc_id": doc_id,
+                    "total_doc_sentences": doc_length,
+                    "is_author": True
+                })
 
             doc_id += 1
 

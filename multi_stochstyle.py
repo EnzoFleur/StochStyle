@@ -78,6 +78,10 @@ if __name__ == "__main__":
                         help='Language encoder')
     parser.add_argument('-hu','--hurst', default=1/2, type=str,
                         help='Hurst parameter (if loss is BB)')
+    parser.add_argument('-am','--authormode', default=1, type=int,
+                        help='How to include author in document. Either 1 (start only) or 2 (start and end)')
+    parser.add_argument('-es','--embeddingsize', default=32, type=int,
+                        help='Size of the latent representation')
     args = parser.parse_args()
 
     data_dir = args.dataset
@@ -90,15 +94,17 @@ if __name__ == "__main__":
     LOSS = args.loss
     HURST = args.hurst
     FINETUNE  = args.finetune
+    AUTHORMODE = args.authormode
+    LATENT_SIZE = args.embeddingsize
 
     CLIPNORM = 1.0
 
     if DATASET == "songs":
-        dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13)
-        dataset_test = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13)
+        dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13, author_mode=AUTHORMODE)
+        dataset_test = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13, author_mode=AUTHORMODE)
     else:
-        dataset_train = GutenbergTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13)
-        dataset_test = GutenbergTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13)
+        dataset_train = GutenbergTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13, author_mode=AUTHORMODE)
+        dataset_test = GutenbergTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13, author_mode=AUTHORMODE)
     
     dataset_train._process_data()
     dataset_test._process_data()
@@ -110,7 +116,7 @@ if __name__ == "__main__":
     author2id = {a:i for i, a in enumerate(sorted(dataset_train.data["author"].unique()))}
     id2author = {i:a for a,i in author2id.items()}
 
-    model = BrownianEncoder(na, 128, 32,
+    model = BrownianEncoder(na, 256, LATENT_SIZE,
                             loss = LOSS,
                             H=HURST,
                             tokenizer = ENCODER,

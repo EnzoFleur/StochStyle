@@ -110,7 +110,7 @@ class BrownianEncoder(nn.Module):
         if authorspacetxt:
             self.authors_embeddings = nn.Embedding(self.na, 768)
         else:
-            self.authors_embeddings = nn.Embedding(self.na, 32)
+            self.authors_embeddings = nn.Embedding(self.na, self.latent_dim)
 
         # nn.init.normal_(self.authors_embeddings.weight, mean=0.0, std=0.02)
 
