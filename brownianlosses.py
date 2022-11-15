@@ -120,17 +120,16 @@ class BrownianLoss(BrownianBridgeLoss):
                 z_0, z_t, z_T, t_, t, T,
                 alpha, var,
                 log_q_y_T,
-                loss_type,
-                eps,
                 max_seq_len,
                 H,
+                eps=1e-6,
                 C_eta=None,
                 label=None):
         super().__init__(
             z_0=z_0, z_t=z_t, z_T=z_T,
             t_=t_, t=t, T=T, alpha=alpha, var=var,
-            log_q_y_T=log_q_y_T, loss_type=loss_type,
-            eps=eps, max_seq_len=max_seq_len, H=H,
+            log_q_y_T=log_q_y_T,
+            max_seq_len=max_seq_len, H=H, eps=eps,
             C_eta=C_eta,
             label=label,
         )
