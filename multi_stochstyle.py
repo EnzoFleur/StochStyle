@@ -99,6 +99,8 @@ if __name__ == "__main__":
 
     CLIPNORM = 1.0
 
+
+
     if DATASET == "songs":
         dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13, author_mode=AUTHORMODE)
         dataset_test = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=False, seed=13, author_mode=AUTHORMODE)
