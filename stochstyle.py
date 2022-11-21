@@ -218,10 +218,10 @@ if __name__ == "__main__":
         style_df = style_embedding_evaluation(aut_embeddings, features.groupby("author").mean().reset_index(), n_fold=10)
 
         with open(os.path.join("results", "%s_aa_results.txt" % DATASET), "a") as f:
-            f.write("%s & ce & lr \n %d & %0.2f & %0.2f" % (model.method, epoch, ce, lr))
+            f.write("%s & ce & lr \n %d & %0.2f & %0.2f\n" % (model.method, epoch, ce, lr))
         
         with open(os.path.join("results", "%s_style_results.txt" % DATASET), "a") as f:
-            f.write("%s & style \n" % (model.method))
+            f.write("\n%s & style \n" % (model.method))
             f.write(style_df.transpose().to_string())
 
         return ce, lr, style_df
@@ -241,7 +241,7 @@ if __name__ == "__main__":
                 loss = get_loss_batch(batch, model, author2id)
                 
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), CLIPNORM)
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), CLIPNORM)
                 optimizer.step()
 
                 loss_training+= loss.item()
