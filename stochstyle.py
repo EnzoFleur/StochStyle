@@ -186,6 +186,8 @@ if __name__ == "__main__":
 
         features = pd.read_csv(os.path.join("datasets", DATASET, "features.csv"), sep=";").sort_values(by=["author", "id"])
 
+        am = test_dataset.author_mode
+
         with torch.no_grad():
 
             if model.authorspacetxt:
@@ -197,7 +199,7 @@ if __name__ == "__main__":
 
             for doc_length, doc in zip(test_dataset.doc_lengths, test_dataset.test_data):
                 input_ids, attention_masks = test_dataset.tokenize_caption(doc, device)
-                doc_embedding = model(input_ids, attention_masks, torch.BoolTensor([False]*doc_length).to(device), torch.LongTensor([]).to(device)).cpu().numpy().mean(axis=0)
+                doc_embedding = model(input_ids, attention_masks, torch.BoolTensor([False]*(doc_length-am)).to(device), torch.LongTensor([]).to(device)).cpu().numpy().mean(axis=0)
 
                 doc_embeddings.append(doc_embedding)
 
@@ -246,7 +248,7 @@ if __name__ == "__main__":
 
             loss_training/=len(train_dataloader)
 
-            if epoch % 10 == 0:
+            if epoch % 2 == 0:
                 model.eval()
 
                 _,_,_ = authorship_attribution_style_eval(model, test_dataset, author2id, epoch)
