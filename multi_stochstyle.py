@@ -261,7 +261,7 @@ if __name__ == "__main__":
                 loss = get_loss_batch(batch, model, author2id)
                 
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), CLIPNORM)
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), CLIPNORM)
                 optimizer.step()
 
                 loss_training+= loss.item()
