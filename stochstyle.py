@@ -107,6 +107,8 @@ if __name__ == "__main__":
                             finetune = FINETUNE,
                             authorspacetxt = AUTHORSPACETEXT).to(device)
 
+    print(model.method)
+
     def init_author_embeddings(init_data, author2id, model):
         print("Initializing author embedding weight")
         for author, author_id in tqdm(author2id.items()):
@@ -233,13 +235,14 @@ if __name__ == "__main__":
         loss_eval = 0
         for epoch in range(1, epochs+1):
             model.train()
-            optimizer.zero_grad()
 
             loss_training = 0
             for batch in tqdm(train_dataloader):  
 
                 loss = get_loss_batch(batch, model, author2id)
-                
+
+                optimizer.zero_grad()
+
                 loss.backward()
                 # torch.nn.utils.clip_grad_norm_(model.parameters(), CLIPNORM)
                 optimizer.step()

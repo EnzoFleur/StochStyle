@@ -70,10 +70,10 @@ class MLP(nn.Module):
             return self.mlp(x)
 
 class BrownianEncoder(nn.Module):
-    def __init__(self, na, hidden_dim, latent_dim, loss, H=1/2,
-                tokenizer="DistilBERT",
-                finetune=False,
-                authorspacetxt = False):
+    def __init__(self, na, hidden_dim, latent_dim, loss, H,
+                tokenizer,
+                finetune,
+                authorspacetxt):
         super(BrownianEncoder, self).__init__()
 
         self.na = na
