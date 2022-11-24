@@ -272,8 +272,6 @@ if __name__ == "__main__":
 
                 loss_training+= loss.item()
 
-            loss_training/=len(train_dataloader)
-
             if epoch % 2 == 0:
                 model.eval()
 

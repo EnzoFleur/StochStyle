@@ -288,9 +288,7 @@ if __name__ == "__main__":
 
                 loss_training+= loss.item()
 
-            loss_training/=len(train_dataloader)
-
-            if epoch % 2 == 0:
+            if (epoch % 2 == 0):
 
                 if (idr_torch.rank == 0):
                     model.eval()
@@ -320,6 +318,7 @@ if __name__ == "__main__":
                         with open(os.path.join("model", "%s_test_data_z.pkl" % model.method), "wb") as f:
                             pickle.dump(test_dataset.processed_data, f)                    
 
+            if (idr_torch.rank == 0):
                 print("[%d/%d] Evaluation loss : %.4f  |  Training loss : %.4f" % (epoch, epochs, loss_eval, loss_training), flush=True)
 
     fit(EPOCHS, model, optimizer, dataloader_train, dataset_test, author2id)
