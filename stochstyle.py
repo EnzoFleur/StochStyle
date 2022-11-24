@@ -50,7 +50,7 @@ if __name__ == "__main__":
                         help='Batch size')
     parser.add_argument('-ep','--epochs', default=100, type=int,
                         help='Epochs')
-    parser.add_argument('-f','--finetune', default=False, type=bool,
+    parser.add_argument('-ft','--finetune', default=False, type=bool,
                         help='Finetuning of the language encoder')
     parser.add_argument('-a','--authorspace', default=False, type=bool,
                         help='Author space embedding (True for word space)')

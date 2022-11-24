@@ -86,6 +86,8 @@ class BrownianEncoder(nn.Module):
 
         self.method = "%s_ATXT%d_FT%d_%s_H%0.2f" % (tokenizer, authorspacetxt, finetune, loss, H) 
 
+        print(self.method)
+
         if self.tokenizer == "DistilBERT":
           self.encoder = DistilBertModel.from_pretrained(DISTILBERT_PATH)
         elif self.tokenizer == "BERT":
