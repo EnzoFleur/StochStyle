@@ -116,7 +116,7 @@ if __name__ == "__main__":
     author2id = {a:i for i, a in enumerate(sorted(dataset_train.data["author"].unique()))}
     id2author = {i:a for a,i in author2id.items()}
 
-    model = BrownianEncoder(na, 256, LATENT_SIZE,
+    model = BrownianEncoder(na=na, hidden_dim=256, latent_dim=LATENT_SIZE,
                             loss = LOSS,
                             H=HURST,
                             tokenizer = ENCODER,

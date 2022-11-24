@@ -50,8 +50,11 @@ if __name__ == "__main__":
                         help='Batch size')
     parser.add_argument('-ep','--epochs', default=100, type=int,
                         help='Epochs')
-    parser.add_argument('-ft','--finetune', default=False, type=bool,
-                        help='Finetuning of the language encoder')
+    parser.add_argument('--finetune', action='store_true')
+    parser.add_argument('--no-finetune', dest='finetune', action='store_false')
+    parser.set_defaults(finetune=True)
+    # parser.add_argument('-ft','--finetune', default=False, type=bool,
+    #                     help='Finetuning of the language encoder')
     parser.add_argument('-a','--authorspace', default=False, type=bool,
                         help='Author space embedding (True for word space)')
     parser.add_argument('-lr','--learningrate', default=1e-4, type=float,
@@ -100,7 +103,7 @@ if __name__ == "__main__":
     author2id = {a:i for i, a in enumerate(sorted(dataset_train.data["author"].unique()))}
     id2author = {i:a for a,i in author2id.items()}
 
-    model = BrownianEncoder(na, 256, LATENT_SIZE,
+    model = BrownianEncoder(na=na, hidden_dim=256, latent_dim=LATENT_SIZE,
                             loss = LOSS,
                             H=HURST,
                             tokenizer = ENCODER,
