@@ -66,8 +66,11 @@ if __name__ == "__main__":
                         help='Batch size')
     parser.add_argument('-ep','--epochs', default=100, type=int,
                         help='Epochs')
-    parser.add_argument('-ft','--finetune', default=False, type=bool,
-                        help='Finetuning of the language encoder')
+    parser.add_argument('--finetune', action='store_true')
+    parser.add_argument('--no-finetune', dest='finetune', action='store_false')
+    parser.set_defaults(finetune=True)
+    # parser.add_argument('-ft','--finetune', default=False, type=bool,
+    #                     help='Finetuning of the language encoder')
     parser.add_argument('-a','--authorspace', default=False, type=bool,
                         help='Author space embedding (True for word space)')
     parser.add_argument('-lr','--learningrate', default=1e-4, type=float,
