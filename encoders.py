@@ -166,3 +166,12 @@ class BrownianEncoder(nn.Module):
             latent_state[is_author] = self.authors_embeddings(authors)
 
         return latent_state
+
+    def encode_doc(self, input_ids, attention_mask):
+        
+        encoder_output = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
+        hidden_state = encoder_output[0]
+
+        hidden_state = self.compute_masked_means(hidden_state, attention_mask)
+
+        return hidden_state

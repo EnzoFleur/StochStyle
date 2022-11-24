@@ -184,44 +184,68 @@ if __name__ == "__main__":
 
         return loss
 
-    def authorship_attribution_style_eval(model, test_dataset, author2id, epoch):
-
-        features = pd.read_csv(os.path.join("datasets", DATASET, "features.csv"), sep=";").sort_values(by=["author", "id"])
-
-        am = test_dataset.author_mode
-
-        with torch.no_grad():
-
-            if model.authorspacetxt:
-                aut_embeddings = model.mlp(model.authors_embeddings.weight).cpu().numpy()
-            else:
-                aut_embeddings = model.authors_embeddings.weight.cpu().numpy()
-
-            doc_embeddings = []
-
-            for doc_length, doc in zip(test_dataset.doc_lengths, test_dataset.test_data):
-                input_ids, attention_masks = test_dataset.tokenize_caption(doc, device)
-                doc_embedding = model(input_ids, attention_masks, torch.BoolTensor([False]*(doc_length-am)).to(device), torch.LongTensor([]).to(device)).cpu().numpy().mean(axis=0)
-
-                doc_embeddings.append(doc_embedding)
-
+    def aa_cosine_similarity(aut_embeddings, doc_embeddings, authors):
+    
         aut_embeddings = normalize(aut_embeddings, axis=1)
         doc_embeddings = normalize(np.vstack(doc_embeddings), axis=1)
 
         nd = len(doc_embeddings)
 
         aut_doc_test = np.zeros((nd, na))
-        aut_doc_test[[i for i in range(nd)],[author2id[author] for author in test_dataset.authors]] = 1
+        aut_doc_test[[i for i in range(nd)],[author2id[author] for author in authors]] = 1
 
         y_score = normalize( doc_embeddings @ aut_embeddings.transpose(),norm="l1")
         ce = coverage_error(aut_doc_test, y_score)/na*100
         lr = label_ranking_average_precision_score(aut_doc_test, y_score)*100
 
+        return ce, lr
+
+
+    def authorship_attribution_style_eval(model, test_dataset, author2id, epoch):
+
+        # am = test_dataset.author_mode
+
+        features = pd.read_csv(os.path.join("datasets", DATASET, "features.csv"), sep=";").sort_values(by=["author", "id"])
+
+        with torch.no_grad():
+
+            if model.authorspacetxt:
+                aut_embeddings = model.authors_embeddings.weight.cpu().numpy()
+                dyn_aut_embeddings = model.mlp(model.authors_embeddings.weight).cpu().numpy()
+            else:
+                aut_embeddings = model.authors_embeddings.weight.cpu().numpy()
+
+            doc_embeddings = []
+            dyn_doc_embeddings = []
+
+            for doc_length, doc in zip(test_dataset.doc_lengths, test_dataset.test_data):
+                input_ids, attention_masks = test_dataset.tokenize_caption(doc, device)
+
+                doc_embedding = model.encode_doc(input_ids, attention_masks)
+                dyn_doc_embedding = model.mlp(doc_embedding).cpu().numpy().mean(axis=0)
+
+                # doc_embedding = model(input_ids, attention_masks, torch.BoolTensor([False]*doc_length - am).to(device), torch.LongTensor([]).to(device)).cpu().numpy().mean(axis=0)
+
+                doc_embeddings.append(doc_embedding.cpu().numpy().mean(axis=0))
+                dyn_doc_embeddings.append(dyn_doc_embedding)
+
+        ce, lr = aa_cosine_similarity(aut_embeddings, doc_embeddings, test_dataset.authors)
+
+        if model.authorspacetxt:
+            dyn_ce, dyn_lr = aa_cosine_similarity(dyn_aut_embeddings, dyn_doc_embeddings, test_dataset.authors)
+        else:
+            dyn_ce = 0.00
+            dyn_lr = 0.00
+
         style_df = style_embedding_evaluation(aut_embeddings, features.groupby("author").mean().reset_index(), n_fold=10)
 
         with open(os.path.join("results", "%s_aa_results.txt" % DATASET), "a") as f:
-            f.write("%s & ce & lr \n %d & %0.2f & %0.2f\n" % (model.method, epoch, ce, lr))
-        
+            f.write("%s & CE   & LR   & dCE  & dLR\n" % model.method)
+            f.write("{num:{fill}{width}} & {ce:0.2f} & {lr:0.2f} & {dce:0.2f} & {dlr:0.2f}\n".format(num=epoch,
+                                                                                                fill=" ",
+                                                                                                width=len(model.method),
+                                                                                                ce=ce, lr=lr, dce=dyn_ce, dlr=dyn_lr))
+
         with open(os.path.join("results", "%s_style_results.txt" % DATASET), "a") as f:
             f.write("\n%s & style \n" % (model.method))
             f.write(style_df.transpose().to_string())
