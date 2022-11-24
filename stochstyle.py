@@ -200,7 +200,6 @@ if __name__ == "__main__":
 
         return ce, lr
 
-
     def authorship_attribution_style_eval(model, test_dataset, author2id, epoch):
 
         # am = test_dataset.author_mode

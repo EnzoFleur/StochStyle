@@ -76,7 +76,7 @@ if __name__ == "__main__":
                         help='Loss (either BB or fBM')
     parser.add_argument('-e','--encoder', default="DistilBERT", type=str,
                         help='Language encoder')
-    parser.add_argument('-hu','--hurst', default=1/2, type=str,
+    parser.add_argument('-hu','--hurst', default=1/2, type=float,
                         help='Hurst parameter (if loss is BB)')
     parser.add_argument('-am','--authormode', default=1, type=int,
                         help='How to include author in document. Either 1 (start only) or 2 (start and end)')
@@ -98,8 +98,6 @@ if __name__ == "__main__":
     LATENT_SIZE = args.embeddingsize
 
     CLIPNORM = 1.0
-
-
 
     if DATASET == "songs":
         dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13, author_mode=AUTHORMODE)
@@ -218,10 +216,9 @@ if __name__ == "__main__":
 
         return ce, lr
 
-
     def authorship_attribution_style_eval(model, test_dataset, author2id, epoch):
 
-        am = test_dataset.author_mode
+        # am = test_dataset.author_mode
 
         features = pd.read_csv(os.path.join("datasets", DATASET, "features.csv"), sep=";").sort_values(by=["author", "id"])
 
