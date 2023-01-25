@@ -52,9 +52,7 @@ if __name__ == "__main__":
                         help='Epochs')
     parser.add_argument('--finetune', action='store_true')
     parser.add_argument('--no-finetune', dest='finetune', action='store_false')
-    parser.set_defaults(finetune=True)
-    # parser.add_argument('-ft','--finetune', default=False, type=bool,
-    #                     help='Finetuning of the language encoder')
+    parser.set_defaults(finetune=False)
     parser.add_argument('-a','--authorspace', default=False, type=bool,
                         help='Author space embedding (True for word space)')
     parser.add_argument('-lr','--learningrate', default=1e-4, type=float,
@@ -152,7 +150,7 @@ if __name__ == "__main__":
         input_ids, attention_masks = dataset_train.tokenize_caption(obs_T, device)
         z_T = model(input_ids, attention_masks, is_author_T, authors_T)
 
-        log_q_y_T = model.get_log_q(z_t)
+        # log_q_y_T = model.get_log_q(z_t)
 
         if model.loss == "BB":
             loss_fn = BrownianBridgeLoss(
@@ -164,7 +162,7 @@ if __name__ == "__main__":
                         T=Ts,
                         alpha=0,
                         var=0,
-                        log_q_y_T=log_q_y_T,
+                        # log_q_y_T=log_q_y_T,
                         max_seq_len=torch.Tensor(batch['total_t'].float()).to(device),
                         H=HURST
                     )
@@ -178,7 +176,7 @@ if __name__ == "__main__":
                 T=Ts,
                 alpha=0,
                 var=0,
-                log_q_y_T=log_q_y_T,
+                # log_q_y_T=log_q_y_T,
                 max_seq_len=torch.Tensor(batch['total_t'].float()).to(device),
                 H=HURST
             )

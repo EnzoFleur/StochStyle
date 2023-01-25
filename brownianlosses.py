@@ -16,14 +16,13 @@ class BrownianBridgeLoss(object):
                 z_0, z_t, z_T,
                 t_, t, T,
                 alpha, var,
-                log_q_y_T,
-                max_seq_len,
-                H,
+                # log_q_y_T,
+                max_seq_len, H,
                 eps=1e-6,
                 C_eta=None,
                 label=None):
         super().__init__()
-        self.log_q_y_T = log_q_y_T
+        # self.log_q_y_T = log_q_y_T
         self.z_0 = z_0
         self.z_t = z_t
         self.z_T = z_T
@@ -64,7 +63,7 @@ class BrownianBridgeLoss(object):
         log_p = self._log_p(z_0=z_0, z_t=z_t, z_T=z_T,
                             t_0=t_, t_1=t, t_2=T)
         log_p = log_p.unsqueeze(-1)
-        log_q = self.log_q_y_T
+        # log_q = self.log_q_y_T
         logit = log_p # - log_q
         return logit # should be (bsz, 1)
 
@@ -119,7 +118,7 @@ class BrownianLoss(BrownianBridgeLoss):
     def __init__(self,
                 z_0, z_t, z_T, t_, t, T,
                 alpha, var,
-                log_q_y_T,
+                # log_q_y_T,
                 max_seq_len,
                 H,
                 eps=1e-6,
@@ -128,7 +127,7 @@ class BrownianLoss(BrownianBridgeLoss):
         super().__init__(
             z_0=z_0, z_t=z_t, z_T=z_T,
             t_=t_, t=t, T=T, alpha=alpha, var=var,
-            log_q_y_T=log_q_y_T,
+            # log_q_y_T=log_q_y_T,
             max_seq_len=max_seq_len, H=H, eps=eps,
             C_eta=C_eta,
             label=label,

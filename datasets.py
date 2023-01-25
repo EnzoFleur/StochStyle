@@ -2,7 +2,7 @@ import pandas as pd
 
 import torch
 from torch.utils.data import Dataset
-from transformers import DistilBertTokenizer, BertTokenizer, GPT2Tokenizer
+from transformers import DistilBertTokenizerFast, BertTokenizerFast, GPT2TokenizerFast
 from sklearn.model_selection import train_test_split
 import os
 import re
@@ -42,14 +42,14 @@ class SongTripletDataset(Dataset):
         self.data = pd.read_csv(os.path.join(data_dir, "songs.csv"), encoding='utf-8', sep=";").sort_values(by=["author", "title"])
 
         if encoder == "DistilBERT":
-          self.tokenizer = DistilBertTokenizer.from_pretrained(DISTILBERT_PATH)
+            self.tokenizer = DistilBertTokenizerFast.from_pretrained(DISTILBERT_PATH)
         elif encoder == "BERT":
-          self.tokenizer = BertTokenizer.from_pretrained(BERT_PATH)
+            self.tokenizer = BertTokenizerFast.from_pretrained(BERT_PATH)
         elif encoder == "GPT2":
-          self.tokenizer = GPT2Tokenizer.from_pretrained(GPT2_PATH)
-          self.tokenizer.pad_token = self.tokenizer.eos_token
-          self.end_token = self.tokenizer.eos_token_id
-          self.max_length = 1024
+            self.tokenizer = GPT2TokenizerFast.from_pretrained(GPT2_PATH)
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.end_token = self.tokenizer.eos_token_id
+            self.max_length = 1024
 
         if self.train:
             self.data, _ = train_test_split(
@@ -215,14 +215,14 @@ class GutenbergTripletDataset(Dataset):
                 self.docs.append(content)
 
         if encoder == "DistilBERT":
-          self.tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+            self.tokenizer = DistilBertTokenizerFast.from_pretrained(DISTILBERT_PATH)
         elif encoder == "BERT":
-          self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+            self.tokenizer = BertTokenizerFast.from_pretrained(BERT_PATH)
         elif encoder == "GPT2":
-          self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-          self.tokenizer.pad_token = self.tokenizer.eos_token
-          self.end_token = self.tokenizer.eos_token_id
-          self.max_length = 1024
+            self.tokenizer = GPT2TokenizerFast.from_pretrained(GPT2_PATH)
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.end_token = self.tokenizer.eos_token_id
+            self.max_length = 1024
 
         if self.train:
             self.authors, _, self.docs, _= train_test_split(
@@ -257,8 +257,7 @@ class GutenbergTripletDataset(Dataset):
 
         for author, doc in zip(self.authors, self.docs):
             
-            temp = doc.split('\n')
-            sentences = [ '\n'.join(temp[i:i+self.sentence_size]) for i in range(0, len(temp),self.sentence_size)]
+            sentences = sent_tokenize(doc)
 
             self.init_data.extend([{"author":author, "sentence":sentence} for sentence in sentences])
             doc_length = len(sentences) + self.author_mode

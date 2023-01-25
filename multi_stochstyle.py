@@ -13,12 +13,11 @@ import pickle
 from encoders import DISTILBERT_PATH, BrownianEncoder
 from brownianlosses import BrownianBridgeLoss, BrownianLoss
 
+from datetime import datetime
 from regressor import style_embedding_evaluation
 from datasets import SongTripletDataset, GutenbergTripletDataset
 
 # Setting up the device for GPU usage
-
-from torch import cuda
 
 import idr_torch
 import torch.distributed as dist
@@ -68,23 +67,21 @@ if __name__ == "__main__":
                         help='Epochs')
     parser.add_argument('--finetune', action='store_true')
     parser.add_argument('--no-finetune', dest='finetune', action='store_false')
-    parser.set_defaults(finetune=True)
-    # parser.add_argument('-ft','--finetune', default=False, type=bool,
-    #                     help='Finetuning of the language encoder')
-    parser.add_argument('-a','--authorspace', default=False, type=bool,
-                        help='Author space embedding (True for word space)')
+    parser.set_defaults(finetune=False)
     parser.add_argument('-lr','--learningrate', default=1e-4, type=float,
                         help='Learning rate')
     parser.add_argument('-l','--loss', default="BB", type=str,
                         help='Loss (either BB or fBM')
     parser.add_argument('-e','--encoder', default="DistilBERT", type=str,
                         help='Language encoder')
-    parser.add_argument('-hu','--hurst', default=1/2, type=float,
-                        help='Hurst parameter (if loss is BB)')
     parser.add_argument('-am','--authormode', default=1, type=int,
                         help='How to include author in document. Either 1 (start only) or 2 (start and end)')
+    parser.add_argument('-hu','--hurst', default=1/2, type=float,
+                        help='Hurst parameter (if loss is BB)')
     parser.add_argument('-es','--embeddingsize', default=32, type=int,
                         help='Size of the latent representation')
+    parser.add_argument('-a','--authorspace', default=False, type=bool,
+                        help='Author space embedding (True for word space)')
     args = parser.parse_args()
 
     data_dir = args.dataset
@@ -93,14 +90,12 @@ if __name__ == "__main__":
     EPOCHS = args.epochs
     LEARNING_RATE = args.learningrate
     ENCODER = args.encoder
-    AUTHORSPACETEXT = args.authorspace
     LOSS = args.loss
     HURST = args.hurst
     FINETUNE  = args.finetune
-    AUTHORMODE = args.authormode
     LATENT_SIZE = args.embeddingsize
-
-    CLIPNORM = 1.0
+    AUTHORMODE = args.authormode
+    AUTHORSPACETEXT = args.authorspace
 
     if DATASET == "songs":
         dataset_train = SongTripletDataset(data_dir = data_dir, encoder=ENCODER, train=True, seed=13, author_mode=AUTHORMODE)
@@ -168,7 +163,7 @@ if __name__ == "__main__":
         input_ids, attention_masks = dataset_train.tokenize_caption(obs_T, device)
         z_T = model(input_ids, attention_masks, is_author_T, authors_T)
 
-        log_q_y_T = model.get_log_q(z_t)
+        # log_q_y_T = model.get_log_q(z_t)
 
         if model.loss == "BB":
             loss_fn = BrownianBridgeLoss(
@@ -180,7 +175,7 @@ if __name__ == "__main__":
                         T=Ts,
                         alpha=0,
                         var=0,
-                        log_q_y_T=log_q_y_T,
+                        # log_q_y_T=log_q_y_T,
                         max_seq_len=torch.Tensor(batch['total_t'].float()).to(device),
                         H=HURST
                     )
@@ -194,7 +189,7 @@ if __name__ == "__main__":
                 T=Ts,
                 alpha=0,
                 var=0,
-                log_q_y_T=log_q_y_T,
+                # log_q_y_T=log_q_y_T,
                 max_seq_len=torch.Tensor(batch['total_t'].float()).to(device),
                 H=HURST
             )
@@ -278,8 +273,10 @@ if __name__ == "__main__":
         for epoch in range(1, epochs+1):
             model.train()
 
+            if idr_torch.rank == 0: start = datetime.now()
+
             loss_training = 0
-            for batch in tqdm(train_dataloader):  
+            for batch in train_dataloader:  
 
                 loss = get_loss_batch(batch, model, author2id)
                 
@@ -301,7 +298,7 @@ if __name__ == "__main__":
 
                     with torch.no_grad():
                         loss_eval = 0
-                        for batch in tqdm(test_dataloader):
+                        for batch in test_dataloader:
 
                             loss = get_loss_batch(batch, model, author2id)
                             loss_eval+= loss.item()
@@ -322,7 +319,7 @@ if __name__ == "__main__":
                             pickle.dump(test_dataset.processed_data, f)                    
 
             if (idr_torch.rank == 0):
-                print("[%d/%d] Evaluation loss : %.4f  |  Training loss : %.4f" % (epoch, epochs, loss_eval, loss_training), flush=True)
+                print("[%d/%d] in %s Evaluation loss : %.4f  |  Training loss : %.4f" % (epoch, epochs, str(datetime.now() - start), loss_eval, loss_training), flush=True)
 
     fit(EPOCHS, model, optimizer, dataloader_train, dataset_test, author2id)
 

@@ -100,7 +100,7 @@ class BrownianEncoder(nn.Module):
 
         self.mlp = MLP(768, self.hidden_dim, self.latent_dim)
 
-        self.log_q = self.create_log_q()
+        # self.log_q = self.create_log_q()
 
         self.C_eta = nn.Linear(1, 1)
 
@@ -130,12 +130,12 @@ class BrownianEncoder(nn.Module):
 
             self.authors_embeddings.weight[author_id] = latent_state
 
-    def create_log_q(self):
-        return nn.Sequential(*[
-            nn.Linear(self.latent_dim, self.latent_dim),
-            nn.Linear(self.latent_dim, self.latent_dim),
-            nn.Linear(self.latent_dim, 1),
-                               ])
+    # def create_log_q(self):
+    #     return nn.Sequential(*[
+    #         nn.Linear(self.latent_dim, self.latent_dim),
+    #         nn.Linear(self.latent_dim, self.latent_dim),
+    #         nn.Linear(self.latent_dim, 1),
+    #                            ])
 
     def compute_masked_means(self, outputs, masks):
         # we don't want to include padding tokens
@@ -150,8 +150,8 @@ class BrownianEncoder(nn.Module):
         masked_outputs = torch.sum(masked_outputs, dim=1) / partition
         return masked_outputs
 
-    def get_log_q(self, x):
-        return self.log_q(x)
+    # def get_log_q(self, x):
+    #     return self.log_q(x)
 
     def forward(self, input_ids, attention_mask, is_author, authors):
 
